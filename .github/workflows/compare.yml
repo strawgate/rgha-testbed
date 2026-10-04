@@ -1,0 +1,57 @@
+# Side-by-side: the same jobs on GitHub-hosted ubuntu-latest and on rgha
+# classes. Analyze with scripts/compare.py.
+name: compare
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, rgha-tiny]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+      - run: echo "runner=$RUNNER_NAME"; nproc; free -m
+  node:
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, rgha-small]
+    runs-on: ${{ matrix.runner }}
+    defaults: { run: { working-directory: node } }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22 }
+      - run: npm ci
+      - run: npm test
+  python:
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, rgha-small]
+    runs-on: ${{ matrix.runner }}
+    defaults: { run: { working-directory: python } }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements.txt
+      - run: python -m pytest -q
+  docker:
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, rgha-docker]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+      - run: docker build -t testbed:ci docker/
+      - run: docker run --rm testbed:ci
+  burst:
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, rgha-tiny]
+        id: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - run: sleep 5
