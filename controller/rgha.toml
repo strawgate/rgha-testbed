@@ -9,6 +9,13 @@ token_env = "GITHUB_TOKEN"
 [backends.modal]
 type = "modal"
 app = "rgha-testbed"
+# ubuntu-slim parity: `python` on PATH (re-actors/alls-green and other
+# composite actions call it).
+image_commands = [
+  "USER root",
+  "RUN apt-get update && apt-get install -y --no-install-recommends python3 python-is-python3 && rm -rf /var/lib/apt/lists/*",
+  "USER runner",
+]
 # Bake common actions and toolchains into the image: no downloads per job.
 [backends.modal.preload]
 actions = ["actions/checkout@v5", "actions/setup-node@v5", "actions/setup-python@v6"]
@@ -20,6 +27,13 @@ type = "modal"
 app = "rgha-testbed"
 runtime = "vm"
 docker = true
+# ubuntu-slim parity: `python` on PATH (re-actors/alls-green and other
+# composite actions call it).
+image_commands = [
+  "USER root",
+  "RUN apt-get update && apt-get install -y --no-install-recommends python3 python-is-python3 && rm -rf /var/lib/apt/lists/*",
+  "USER runner",
+]
 
 # Shell jobs, PRs from anyone: tiny, warm, GitHub-only egress.
 [[class]]
