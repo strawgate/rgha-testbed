@@ -92,7 +92,9 @@ jobs:
       - name: Stand-in agent under the firewall (mostly waiting on the network)
         run: |
           set -o pipefail
-          awf --allow-domains api.github.com,github.com --log-level info --skip-pull -- /bin/bash -c '
+          # Same mode as gh-aw's compiled workflows: rootless network isolation.
+          printf '%s' '{"network":{"allowDomains":["api.github.com","github.com"],"isolation":true}}' > "${RUNNER_TEMP}/awf-config.json"
+          awf --config "${RUNNER_TEMP}/awf-config.json" --log-level info --skip-pull -- /bin/bash -c '
             end=$(( $(date +%s) + AGENT_MINUTES * 60 )); n=0
             while [ "$(date +%s)" -lt "$end" ]; do curl -sf -o /dev/null https://api.github.com/zen && n=$((n+1)); sleep 10; done
             echo "allowed requests ok: $n"
