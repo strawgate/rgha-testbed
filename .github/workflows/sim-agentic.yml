@@ -94,13 +94,12 @@ jobs:
           set -o pipefail
           # Same mode as gh-aw's compiled workflows: rootless network isolation.
           printf '%s' '{"network":{"allowDomains":["api.github.com","github.com"],"isolation":true}}' > "${RUNNER_TEMP}/awf-config.json"
-          awf --config "${RUNNER_TEMP}/awf-config.json" --log-level info --skip-pull -- /bin/bash -c '
+          awf --config "${RUNNER_TEMP}/awf-config.json" --env-all --log-level info --skip-pull -- /bin/bash -c '
             end=$(( $(date +%s) + AGENT_MINUTES * 60 )); n=0
             while [ "$(date +%s)" -lt "$end" ]; do curl -sf -o /dev/null https://api.github.com/zen && n=$((n+1)); sleep 10; done
-            echo "allowed requests ok: $n"
-            if curl -s -m 10 -o /dev/null https://example.com; then echo "FIREWALL FAILED: example.com reachable"; exit 1; fi
-            echo "blocked domain refused: ok"
-            echo "{\"summary\": \"simulated agent ran $n polls\"}" > /tmp/agent-output.json
+            if curl -s -m 10 -o /dev/null https://example.com; then blocked=no; else blocked=yes; fi
+            printf "RESULT polls=%d blocked=%s\n" "$n" "$blocked"
+            [ "$n" -gt 0 ] && [ "$blocked" = yes ]
           ' | tee /tmp/gh-aw/agent.log
       - if: always()
         uses: actions/upload-artifact@v4
@@ -121,8 +120,9 @@ jobs:
         with:
           script: |
             const log = require('fs').readFileSync('/tmp/gh-aw/agent.log', 'utf8');
-            const ok = log.includes('blocked domain refused: ok');
-            const body = `sim-agentic: firewall ${ok ? 'enforced' : 'NOT enforced'} on \`${process.env.RUNNER_NAME}\` (run ${context.runId})`;
+            const m = log.match(/^RESULT polls=(\d+) blocked=(\w+)$/m);
+            const ok = !!m && Number(m[1]) > 0 && m[2] === 'yes';
+            const body = `sim-agentic: ${m ? m[0] : 'no RESULT line'} → ${ok ? 'firewall OK' : 'FAILED'} (run ${context.runId})`;
             const number = context.payload.pull_request?.number ?? context.payload.issue?.number;
             if (number) await github.rest.issues.createComment({ ...context.repo, issue_number: number, body });
             else core.summary.addRaw(body).write();
