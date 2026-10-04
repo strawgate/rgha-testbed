@@ -9,6 +9,11 @@ token_env = "GITHUB_TOKEN"
 [backends.modal]
 type = "modal"
 app = "rgha-testbed"
+# Bake common actions and toolchains into the image: no downloads per job.
+[backends.modal.preload]
+actions = ["actions/checkout@v5", "actions/setup-node@v5", "actions/setup-python@v6"]
+node = ["22"]
+python = ["3.12"]
 
 [backends.modal-vm]
 type = "modal"
@@ -20,11 +25,13 @@ docker = true
 [[class]]
 name = "rgha-tiny"
 backend = "modal"
-cpu = 0.25
-cpu_limit = 2.0
-memory_mib = 1024
+cpu = 0.125              # billed floor while idle...
+cpu_limit = 2.0          # ...burst to 2 cores (billed on usage)
+memory_mib = 256
+memory_limit_mib = 2048
 max_runners = 12
 min_idle = 1
+warm_for_secs = 600      # keep the warm runner for 10 min after the last job
 max_job_minutes = 10
 network = "github-only"
 [class.policy]
@@ -34,9 +41,10 @@ trust = "untrusted"
 [[class]]
 name = "rgha-small"
 backend = "modal"
-cpu = 0.5
+cpu = 0.25
 cpu_limit = 2.0
-memory_mib = 2048
+memory_mib = 512
+memory_limit_mib = 4096
 max_runners = 6
 max_job_minutes = 15
 network = "allowlist"
