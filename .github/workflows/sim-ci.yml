@@ -1,0 +1,79 @@
+# Pilot simulation of Platform's main.yml light jobs (resolve, detect-changes,
+# check) on rgha, with the heavy jobs left on other runners. The runner for
+# light jobs comes from the LIGHT_RUNNER repo variable, so one variable flips
+# everything back to GitHub-hosted.
+name: sim-ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  resolve:
+    runs-on: ${{ vars.LIGHT_RUNNER || 'ubuntu-slim' }}
+    timeout-minutes: 5
+    outputs:
+      run_tests: ${{ steps.r.outputs.run_tests }}
+    steps:
+      - id: r
+        run: echo "run_tests=${{ github.event_name != 'push' }}" >> "$GITHUB_OUTPUT"
+
+  detect-changes:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    concurrency:
+      group: ${{ github.workflow }}-detect-changes-${{ github.event.pull_request.number || github.sha }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    runs-on: ${{ vars.LIGHT_RUNNER || 'ubuntu-slim' }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+      node: ${{ steps.filter.outputs.node }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        id: filter
+        with:
+          filters: |
+            python: ['python/**']
+            node: ['node/**']
+
+  oidc:
+    # GCP-style workload identity: the job mints a GitHub OIDC token.
+    runs-on: ${{ vars.LIGHT_RUNNER || 'ubuntu-slim' }}
+    timeout-minutes: 5
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            const token = await core.getIDToken('https://iam.googleapis.com/sim');
+            const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
+            core.info(`OIDC ok: sub=${claims.sub} aud=${claims.aud} runner_environment=${claims.runner_environment}`);
+
+  test:
+    # Heavy jobs stay on their current runners (Ubicloud/Depot in Platform).
+    needs: [resolve, detect-changes]
+    if: needs.resolve.outputs.run_tests == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - run: python3 cpu/burn.py 4 2
+
+  check:
+    if: always()
+    needs: [resolve, detect-changes, oidc, test]
+    runs-on: ${{ vars.LIGHT_RUNNER || 'ubuntu-slim' }}
+    timeout-minutes: 5
+    steps:
+      - uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # release/v1
+        with:
+          allowed-skips: test, detect-changes
+          jobs: ${{ toJSON(needs) }}

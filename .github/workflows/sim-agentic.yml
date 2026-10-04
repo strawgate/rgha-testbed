@@ -1,0 +1,142 @@
+# Pilot simulation of a Platform gh-aw agentic workflow. Same job shape and
+# runners as the compiled .lock.yml files: light orchestration jobs plus an
+# agent job that installs the real gh-aw firewall (AWF) and Docker images,
+# then runs a stand-in "agent" under the firewall that mostly waits on the
+# network, like an LLM agent does.
+name: sim-agentic
+on:
+  pull_request:
+    paths: ['sim/**']
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: how long the stand-in agent waits
+        default: "3"
+permissions: {}
+concurrency:
+  group: sim-agentic-${{ github.event.pull_request.number || github.event.issue.number || github.ref }}
+  cancel-in-progress: true
+env:
+  AWF_VERSION: v0.27.22
+  AGENT_MINUTES: ${{ inputs.minutes || '3' }}
+jobs:
+  pre_activation:
+    if: github.event_name != 'issue_comment' || startsWith(github.event.comment.body, '/sim')
+    runs-on: ${{ vars.LIGHT_RUNNER || 'ubuntu-slim' }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      activated: ${{ steps.check.outputs.activated }}
+    steps:
+      - id: check
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+              ...context.repo, username: context.actor });
+            core.info(`actor ${context.actor} has ${data.permission}`);
+            core.setOutput('activated', ['admin', 'write', 'maintain'].includes(data.permission));
+
+  activation:
+    needs: pre_activation
+    if: needs.pre_activation.outputs.activated == 'true'
+    runs-on: ${{ vars.LIGHT_RUNNER || 'ubuntu-slim' }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with: { sparse-checkout: sim }
+      - run: |
+          mkdir -p /tmp/gh-aw
+          echo "Simulated prompt for ${{ github.event_name }} by ${{ github.actor }}" > /tmp/gh-aw/prompt.txt
+      - uses: actions/upload-artifact@v4
+        with: { name: activation, path: /tmp/gh-aw/prompt.txt }
+
+  agent:
+    needs: activation
+    runs-on: ${{ vars.AGENT_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Setup Scripts
+        uses: github/gh-aw-actions/setup@3fac1cfa7a5a375a6a5eb9839178f6dad7adb60a
+        with:
+          destination: ${{ runner.temp }}/gh-aw/actions
+          job-name: ${{ github.job }}
+      - name: Install ripgrep
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22 }
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.12" }
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/download-artifact@v4
+        with: { name: activation, path: /tmp/gh-aw }
+      - name: Install AWF binary
+        run: bash "${RUNNER_TEMP}/gh-aw/actions/install_awf_binary.sh" "$AWF_VERSION" --rootless
+      - name: Download container images
+        run: |
+          bash "${RUNNER_TEMP}/gh-aw/actions/download_docker_images.sh" \
+            ghcr.io/github/gh-aw-firewall/agent:0.27.22@sha256:55f06588411008b7148eb64b8dfe28602a0cce3675b36c6b190b54aca138468e \
+            ghcr.io/github/gh-aw-firewall/squid:0.27.22@sha256:3cdcc1e2b4b4fe602ba69fd3e21aac7ac512d5c1fce24df4ce69dc4f98164b59 \
+            ghcr.io/github/github-mcp-server:v1.5.0@sha256:e25564dccc9110a70a77b9df560cbde11aa392fcb5f08b9abe5c4ebc6d146ea4
+          docker images
+      - name: Container with the Docker socket mounted (as the MCP gateway does)
+        run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock docker:27-cli docker ps
+      - name: Stand-in agent under the firewall (mostly waiting on the network)
+        run: |
+          set -o pipefail
+          awf --allow-domains api.github.com,github.com --log-level info --skip-pull -- /bin/bash -c '
+            end=$(( $(date +%s) + AGENT_MINUTES * 60 )); n=0
+            while [ "$(date +%s)" -lt "$end" ]; do curl -sf -o /dev/null https://api.github.com/zen && n=$((n+1)); sleep 10; done
+            echo "allowed requests ok: $n"
+            if curl -s -m 10 -o /dev/null https://example.com; then echo "FIREWALL FAILED: example.com reachable"; exit 1; fi
+            echo "blocked domain refused: ok"
+            echo "{\"summary\": \"simulated agent ran $n polls\"}" > /tmp/agent-output.json
+          ' | tee /tmp/gh-aw/agent.log
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: agent, path: /tmp/gh-aw/agent.log }
+
+  safe_outputs:
+    needs: agent
+    runs-on: ${{ vars.LIGHT_RUNNER || 'ubuntu-slim' }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: agent, path: /tmp/gh-aw }
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            const log = require('fs').readFileSync('/tmp/gh-aw/agent.log', 'utf8');
+            const ok = log.includes('blocked domain refused: ok');
+            const body = `sim-agentic: firewall ${ok ? 'enforced' : 'NOT enforced'} on \`${process.env.RUNNER_NAME}\` (run ${context.runId})`;
+            const number = context.payload.pull_request?.number ?? context.payload.issue?.number;
+            if (number) await github.rest.issues.createComment({ ...context.repo, issue_number: number, body });
+            else core.summary.addRaw(body).write();
+            if (!ok) core.setFailed('firewall not enforced');
+
+  conclusion:
+    if: always() && needs.pre_activation.outputs.activated == 'true'
+    needs: [pre_activation, activation, agent, safe_outputs]
+    runs-on: ${{ vars.LIGHT_RUNNER || 'ubuntu-slim' }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            const needs = ${{ toJSON(needs) }};
+            for (const [job, r] of Object.entries(needs)) core.info(`${job}: ${r.result}`);
+            if (Object.values(needs).some(r => r.result === 'failure')) core.setFailed('a job failed');
