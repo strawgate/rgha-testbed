@@ -26,6 +26,11 @@ jobs:
         run: |
           echo "uptime=$(cut -d' ' -f1 /proc/uptime)"; head -1 /proc/stat
           cat /sys/fs/cgroup/cpu.stat 2>/dev/null | head -3 || true
+      - name: /dev/shm (missing on Cloudflare Containers)
+        run: |
+          ls -ld /dev/shm || true; id; mount | grep -E " / | /dev " || true
+          if ! [ -w /dev/shm ]; then sudo mkdir -p /dev/shm && sudo mount -t tmpfs -o mode=1777 tmpfs /dev/shm; fi
+          ls -ld /dev/shm
       - if: inputs.suite != 'smoke'
         uses: actions/setup-python@v6
         with: { python-version: "3.12" }
