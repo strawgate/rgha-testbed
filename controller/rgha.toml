@@ -36,6 +36,7 @@ max_job_minutes = 10
 network = "github-only"
 [class.policy]
 trust = "untrusted"
+allowed_actors = ["strawgate"]   # only our own runs; everyone else is cancelled
 
 # Toolchains + package registries; same-repo PRs only (forks use rgha-tiny).
 [[class]]
@@ -59,6 +60,7 @@ allow_domains = [
 ]
 [class.policy]
 trust = "untrusted"
+allowed_actors = ["strawgate"]   # only our own runs; everyone else is cancelled
 allow_fork_prs = false
 
 # Docker (builds, container jobs, services) for code already on a branch.
@@ -76,4 +78,5 @@ max_job_minutes = 20
 network = "open"
 [class.policy]
 trust = "trusted"
+allowed_actors = ["strawgate"]   # only our own runs; everyone else is cancelled
 allowed_repos = ["strawgate/rgha-testbed"]
