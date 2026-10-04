@@ -33,3 +33,19 @@ gh workflow run docker.yml
 ```
 
 To run the policy probe, open a PR that changes anything under `probe/`.
+
+## Results (rgha v0.1.0, 2026-10-04)
+
+Controller: released `rgha` v0.1.0 macOS binary, config in `controller/rgha.toml`.
+
+| Run | Outcome | Notes |
+|---|---|---|
+| `smoke` (push) | ✅ | warm runner, pickup 0.1 s, job 6.4 s; `example.com` blocked |
+| `languages` (push) | ✅ node, ✅ python | `setup-node` + npm, `setup-python` + PyPI through the egress allowlist; pickup ~5 s cold |
+| `docker` (push) | ✅ build, ✅ services | `docker build`/`run`, `container:` job + `redis` service on the Modal VM runtime; pickup ~5 s |
+| `burst` (20 jobs × 10 s) | ✅ 21/21 | 44 s wall; pickup p50 4.1 s, p90 4.8 s, max 15.3 s (queued behind `max_runners = 12`) |
+| PR #1 → `policy-probe` | ✅ **cancelled** in 3 s | rgha rejected a `pull_request` job aimed at the trusted Docker class |
+| PR #1 → `smoke`, `languages` | ✅ | untrusted classes accept PRs |
+
+Estimated Modal spend for the whole session was about $0.04 (including warm-runner idle
+time). The same jobs on per-minute GitHub-hosted runners would cost about $0.17.
