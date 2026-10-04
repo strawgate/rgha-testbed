@@ -37,7 +37,7 @@ network = "github-only"
 [class.policy]
 trust = "untrusted"
 
-# Toolchains + package registries, PRs from anyone: egress allowlist.
+# Toolchains + package registries; same-repo PRs only (forks use rgha-tiny).
 [[class]]
 name = "rgha-small"
 backend = "modal"
@@ -58,6 +58,7 @@ allow_domains = [
 ]
 [class.policy]
 trust = "untrusted"
+allow_fork_prs = false
 
 # Docker (builds, container jobs, services) for code already on a branch.
 [[class]]
