@@ -33,7 +33,8 @@ def rgha_costs(log):
     cost = {}
     for line in open(log, encoding="utf-8", errors="replace"):
         line = re.sub(r"\x1b\[[0-9;]*m", "", line)
-        m = re.search(r"runner finished .*runner=(\S+) .*cost_usd=\"([0-9.]+)\"", line)
+        # " cost_usd=" with a leading space: not the cumulative total_cost_usd.
+        m = re.search(r"runner finished .* runner=(\S+) .* cost_usd=\"([0-9.]+)\"", line)
         if m:
             cost[m.group(1)] = float(m.group(2))
     return cost

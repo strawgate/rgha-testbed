@@ -60,3 +60,49 @@ time). The same jobs on per-minute GitHub-hosted runners would cost about $0.17.
 | `warm_for_secs = 600` | warm 24/7 | pool switched off 10 min after the last job |
 | Region pinned to `us-east` | cold pickup 4.0 s avg | 3.6 s avg; within noise, not worth 1.75× price |
 | Memory-snapshot "hibernated" runner | n/a | **no-go**: restored runner shows online, but never took the job (still queued after 7.5 min) |
+
+## GitHub-hosted vs rgha (2026-10-04, rgha `main` after v0.1.1)
+
+`compare.yml` runs the same jobs on `ubuntu-latest` and on rgha classes; 3
+rounds = 42 jobs per side. Analyzed with
+`scripts/compare.py <controller-log> <run ids>`. Queue = job `started_at -
+created_at`; duration = `completed_at - started_at`. GitHub cost uses the
+private-repo price ($0.006/min, rounded up per job); standard runners are
+free on public repos. rgha cost is the controller's per-job estimate.
+
+**Cold** (scale to zero; one warm `rgha-tiny` runner within 10 min of activity):
+
+| job | GitHub queue p50 | rgha queue p50 | GitHub dur p50 | rgha dur p50 | GitHub $/job | rgha $/job |
+|---|---|---|---|---|---|---|
+| smoke (`rgha-tiny`) | 5.0 s | 7.0 s | 4.0 s | 6.0 s | 0.00600 | 0.00083 |
+| node (`rgha-small`) | 3.0 s | 8.0 s | 6.0 s | 6.0 s | 0.00600 | 0.00092 |
+| python (`rgha-small`) | 3.0 s | 8.0 s | 8.0 s | 8.0 s | 0.00600 | 0.00105 |
+| docker (`rgha-docker`) | 5.0 s | 7.0 s | 12.0 s | 5.0 s | 0.00600 | 0.00085 |
+| burst ×10 (`rgha-tiny`) | 5.0 s | 8.0 s | 7.0 s | 7.0 s | 0.00600 | 0.00083 |
+| **42 jobs** | | | | | **$0.252** | **$0.036** (controller total incl. idle: $0.040) |
+
+Of rgha's ~8 s queue, ~3–4 s is GitHub-side (job created → assigned to the scale
+set) and ~4–5 s is cold pickup (only 3/33 tiny jobs found a warm runner).
+
+**Warm pools sized to the burst** (`min_idle`: tiny 11, small 2, docker 1; `warm_for_secs = 600`):
+
+| job | GitHub queue p50 | rgha queue p50 | GitHub dur p50 | rgha dur p50 | rgha $/job |
+|---|---|---|---|---|---|
+| smoke | 4.0 s | 3.0 s | 5.0 s | 6.0 s | 0.00125 |
+| node | 4.0 s | 4.0 s | 7.0 s | 8.0 s | 0.00190 |
+| python | 5.0 s | 4.0 s | 9.0 s | 7.0 s | 0.00185 |
+| docker | 5.0 s | 3.0 s | 11.0 s | 5.0 s | 0.00546 |
+| burst ×10 | 5.0 s | 4.0 s | 7.0 s | 8.0 s | 0.00124 |
+
+Warm pickups: tiny 33/34, small 6/8, docker 3/5. The jobs themselves cost $0.069
+(3.7× less than GitHub's $0.252). The **controller total** of $0.174 also covers
+the priming jobs and the 10-minute idle tail of 14 warm runners after the last
+job, against roughly $0.28 for the same jobs on GitHub. At this low volume the
+idle tail dominates; it needs throughput, or smaller and smarter warm pools, to
+pay off.
+
+**Takeaways**
+- Scale-to-zero is ~7× cheaper than per-minute hosted runners, at the cost of ~3–4 s more queue time.
+- With warm pools, rgha matched or beat GitHub-hosted queue times, and Docker builds ran ~2× faster (5 s vs 11–12 s).
+- Warm pools cost real money at low volume: keep warm requests tiny (the docker class's 1 core / 4 GiB idle request was the most expensive part of the tail), and size pools to demand (strawgate/rgha#16).
+- Hardware differs: public-repo `ubuntu-latest` is 4 vCPU / 16 GB; these rgha classes request 0.125–1 core and burst to 2.
