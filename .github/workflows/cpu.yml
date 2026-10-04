@@ -1,0 +1,32 @@
+# CPU-bound jobs with a fixed amount of work, side by side on GitHub-hosted
+# and rgha, to compare wall time and cost when the job actually burns CPU.
+name: cpu
+on:
+  workflow_dispatch:
+    inputs:
+      chunks:
+        description: work units (each a few CPU-seconds)
+        default: "24"
+permissions:
+  contents: read
+jobs:
+  parallel:
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, rgha-tiny]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.12" }
+      - run: python cpu/burn.py ${{ inputs.chunks }} 4
+  single:
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, rgha-tiny]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.12" }
+      - run: python cpu/burn.py 6 1
