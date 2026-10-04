@@ -30,8 +30,8 @@ cpu_limit = 2.0          # ...burst to 2 cores (billed on usage)
 memory_mib = 256
 memory_limit_mib = 2048
 max_runners = 12
-min_idle = 1
-warm_for_secs = 600      # keep the warm runner for 10 min after the last job
+min_idle = 0             # floor: scale to zero when quiet
+warm_max = 4             # adaptive: +1 warm runner/min while jobs start cold, -1 per 5 min quiet
 max_job_minutes = 10
 network = "github-only"
 [class.policy]
@@ -41,11 +41,12 @@ trust = "untrusted"
 [[class]]
 name = "rgha-small"
 backend = "modal"
-cpu = 0.25
+cpu = 0.125
 cpu_limit = 2.0
-memory_mib = 512
+memory_mib = 256
 memory_limit_mib = 4096
 max_runners = 6
+warm_max = 2
 max_job_minutes = 15
 network = "allowlist"
 allow_domains = [
@@ -64,10 +65,13 @@ allow_fork_prs = false
 [[class]]
 name = "rgha-docker"
 backend = "modal-vm"
-cpu = 1.0
+cpu = 0.125
 cpu_limit = 2.0
-memory_mib = 4096
+memory_mib = 512
+memory_limit_mib = 4096
 max_runners = 4
+warm_max = 1
+allow_warm_trusted = true  # testbed: accepts the warm-pool race until the job hook (#9)
 max_job_minutes = 20
 network = "open"
 [class.policy]
