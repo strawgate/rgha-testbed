@@ -1,0 +1,66 @@
+# rgha config for this testbed. Run from the repo root:
+#   GITHUB_TOKEN=$(gh auth token) rgha run --config controller/rgha.toml --metrics-addr 127.0.0.1:9464
+# or with the container image (see README).
+
+[github]
+url = "https://github.com/strawgate/rgha-testbed"
+token_env = "GITHUB_TOKEN"
+
+[backends.modal]
+type = "modal"
+app = "rgha-testbed"
+
+[backends.modal-vm]
+type = "modal"
+app = "rgha-testbed"
+runtime = "vm"
+docker = true
+
+# Shell jobs, PRs from anyone: tiny, warm, GitHub-only egress.
+[[class]]
+name = "rgha-tiny"
+backend = "modal"
+cpu = 0.25
+cpu_limit = 2.0
+memory_mib = 1024
+max_runners = 12
+min_idle = 1
+max_job_minutes = 10
+network = "github-only"
+[class.policy]
+trust = "untrusted"
+
+# Toolchains + package registries, PRs from anyone: egress allowlist.
+[[class]]
+name = "rgha-small"
+backend = "modal"
+cpu = 0.5
+cpu_limit = 2.0
+memory_mib = 2048
+max_runners = 6
+max_job_minutes = 15
+network = "allowlist"
+allow_domains = [
+  "raw.githubusercontent.com",
+  "release-assets.githubusercontent.com",
+  "registry.npmjs.org",
+  "nodejs.org",
+  "pypi.org",
+  "files.pythonhosted.org",
+]
+[class.policy]
+trust = "untrusted"
+
+# Docker (builds, container jobs, services) for code already on a branch.
+[[class]]
+name = "rgha-docker"
+backend = "modal-vm"
+cpu = 1.0
+cpu_limit = 2.0
+memory_mib = 4096
+max_runners = 4
+max_job_minutes = 20
+network = "open"
+[class.policy]
+trust = "trusted"
+allowed_repos = ["strawgate/rgha-testbed"]

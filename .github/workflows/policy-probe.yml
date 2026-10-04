@@ -1,0 +1,14 @@
+# A pull request that targets the trusted Docker class. rgha's policy must
+# cancel this run before any PR code reaches a trusted runner.
+# Expected result: cancelled.
+name: policy-probe
+on:
+  pull_request:
+    paths: ["probe/**"]
+permissions:
+  contents: read
+jobs:
+  should-be-cancelled:
+    runs-on: rgha-docker
+    steps:
+      - run: echo "::error::PR code reached a trusted runner"; exit 1

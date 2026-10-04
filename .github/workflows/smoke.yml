@@ -1,0 +1,28 @@
+# Shell-only job on the smallest, most locked-down class. Runs for pushes and
+# for pull requests (including forks): rgha-tiny is an untrusted class.
+name: smoke
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: rgha-tiny
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - run: |
+          echo "runner=$RUNNER_NAME event=$GITHUB_EVENT_NAME"
+          uname -r
+          nproc; free -m
+      - name: GitHub reachable
+        run: curl -fsS -o /dev/null -w '%{http_code}\n' https://api.github.com
+      - name: Arbitrary egress blocked
+        run: |
+          if curl -fsS --max-time 5 https://example.com -o /dev/null; then
+            echo "::error::example.com reachable on a github-only class"; exit 1
+          fi
+          echo "blocked as expected"

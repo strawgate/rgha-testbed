@@ -1,0 +1,7 @@
+{
+  "name": "rgha-testbed-node",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test" },
+  "dependencies": { "semver": "^7.7.2" }
+}

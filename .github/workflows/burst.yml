@@ -1,0 +1,33 @@
+# Fan out N short jobs at once to exercise scale-out, concurrency limits
+# (max_runners) and pickup latency under load.
+name: burst
+on:
+  workflow_dispatch:
+    inputs:
+      jobs:
+        description: Number of parallel jobs
+        default: "10"
+      seconds:
+        description: Seconds each job sleeps
+        default: "5"
+permissions:
+  contents: read
+jobs:
+  plan:
+    runs-on: rgha-tiny
+    outputs:
+      ids: ${{ steps.ids.outputs.ids }}
+    steps:
+      - id: ids
+        run: echo "ids=$(seq -s, 1 ${{ inputs.jobs }} | sed 's/^/[/;s/$/]/')" >> "$GITHUB_OUTPUT"
+  work:
+    needs: plan
+    runs-on: rgha-tiny
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        id: ${{ fromJSON(needs.plan.outputs.ids) }}
+    steps:
+      - run: |
+          echo "job ${{ matrix.id }} on $RUNNER_NAME"
+          sleep ${{ inputs.seconds }}
