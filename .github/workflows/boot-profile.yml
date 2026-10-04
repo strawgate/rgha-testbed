@@ -3,11 +3,15 @@
 name: boot-profile
 on:
   workflow_dispatch:
+    inputs:
+      runner:
+        description: runs-on label
+        default: rgha-tiny
 permissions:
   contents: read
 jobs:
   profile:
-    runs-on: rgha-tiny
+    runs-on: ${{ inputs.runner }}
     steps:
       - name: Timeline
         run: |
