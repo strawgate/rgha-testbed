@@ -1,0 +1,39 @@
+# A mostly idle job: polls the GitHub API every 15 s, like a "wait for other
+# jobs / deploy" check. Measures what idle runner time costs on each backend.
+name: idle
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: runs-on label
+        default: rgha-tiny
+      minutes:
+        default: "5"
+permissions:
+  contents: read
+  actions: read
+jobs:
+  wait:
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - name: Start
+        run: |
+          echo "runner=$RUNNER_NAME nproc=$(nproc) uptime=$(cut -d' ' -f1 /proc/uptime)"; free -m
+          head -1 /proc/stat
+      - name: Poll GitHub for ${{ inputs.minutes }} min
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MINUTES: ${{ inputs.minutes }}
+        run: |
+          end=$(( $(date +%s) + MINUTES * 60 ))
+          n=0
+          while [ "$(date +%s)" -lt "$end" ]; do
+            curl -sf -H "authorization: Bearer $GH_TOKEN" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs" -o /dev/null && n=$((n+1))
+            sleep 15
+          done
+          echo "polls=$n"
+      - name: End
+        if: always()
+        run: |
+          echo "uptime=$(cut -d' ' -f1 /proc/uptime)"; head -1 /proc/stat
