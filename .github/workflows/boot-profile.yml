@@ -1,0 +1,21 @@
+# Dumps the runner's own diagnostic timeline from inside the sandbox, to see
+# where cold-start time goes (sandbox boot vs .NET start vs broker session).
+name: boot-profile
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  profile:
+    runs-on: rgha-tiny
+    steps:
+      - name: Timeline
+        run: |
+          echo "step_now=$(date -u +%FT%T.%3NZ) uptime=$(cut -d' ' -f1 /proc/uptime)s"
+          echo "pid1: $(ps -o lstart= -p 1) | $(tr '\0' ' ' < /proc/1/cmdline)"
+          cd /home/runner/_diag
+          ls -la
+          echo "--- Runner log (key lines)"
+          grep -h -E "Runner.Listener|Version:|Commit:|Culture|Starting|start|session|Session|Listening|Connected|message|Message|job|Job|Worker" Runner_*.log | cut -c1-220 | head -80
+          echo "--- Worker log head"
+          head -15 Worker_*.log | cut -c1-200
