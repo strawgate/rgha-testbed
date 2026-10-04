@@ -1,0 +1,31 @@
+# Jobs for runners started on Cloudflare Containers (strawgate/rgha#42).
+# Start one runner per job first (rgha/cloudflare/scripts/start-runner.sh).
+name: cf
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        type: choice
+        options: [smoke, cpu-single, cpu-parallel]
+        default: smoke
+      jobs:
+        description: JSON list, one entry per job
+        default: "[1]"
+permissions:
+  contents: read
+jobs:
+  run:
+    strategy:
+      matrix:
+        n: ${{ fromJSON(inputs.jobs) }}
+    runs-on: rgha-cf
+    steps:
+      - uses: actions/checkout@v5
+      - run: echo "runner=$RUNNER_NAME uptime=$(cut -d' ' -f1 /proc/uptime)s"; nproc; free -m
+      - if: inputs.suite != 'smoke'
+        uses: actions/setup-python@v6
+        with: { python-version: "3.12" }
+      - if: inputs.suite == 'cpu-single'
+        run: python cpu/burn.py 6 1
+      - if: inputs.suite == 'cpu-parallel'
+        run: python cpu/burn.py 24 4
