@@ -1,0 +1,25 @@
+# Egress allowlist on the Firecracker backend (strawgate/rgha#22):
+# rgha-fc-locked has network = "github-only".
+name: fc-locked
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  locked:
+    runs-on: rgha-fc-locked
+    steps:
+      - uses: actions/checkout@v5
+      - name: GitHub allowed
+        run: curl -fsS -o /dev/null -w 'api.github.com %{http_code}\n' https://api.github.com
+      - name: Everything else blocked
+        run: |
+          fail=0
+          check() { if curl -fsS --max-time 5 -o /dev/null "$@" 2>/dev/null; then echo "::error::reachable: $*"; fail=1; else echo "blocked: $*"; fi; }
+          check https://example.com
+          check http://example.com
+          check --resolve example.com:443:140.82.112.3 https://example.com   # allowlisted-looking IP, disallowed SNI
+          check -k https://140.82.112.3                                      # direct IP, no SNI
+          check https://pypi.org
+          getent hosts example.com >/dev/null && echo "DNS resolves" || { echo "::error::DNS broken"; fail=1; }
+          exit $fail
