@@ -4,6 +4,7 @@ name: smoke
 on:
   push:
     branches: [main]
+    paths-ignore: ["**.md", "controller/**"]
   pull_request:
   workflow_dispatch:
 permissions:

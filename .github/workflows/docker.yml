@@ -4,6 +4,7 @@ name: docker
 on:
   push:
     branches: [main]
+    paths-ignore: ["**.md", "controller/**"]
   workflow_dispatch:
 permissions:
   contents: read

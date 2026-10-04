@@ -49,3 +49,14 @@ Controller: released `rgha` v0.1.0 macOS binary, config in `controller/rgha.toml
 
 Estimated Modal spend for the whole session was about $0.04 (including warm-runner idle
 time). The same jobs on per-minute GitHub-hosted runners would cost about $0.17.
+
+## Speed work (2026-10-04)
+
+| Change | Before | After |
+|---|---|---|
+| Preloaded image (`[backends.modal.preload]`) | `setup-node` 4 s, `setup-python` 9 s | 0 s, 1 s |
+| | node job 14.6 s, python job 19.5 s | 6.9 s, 8.1 s |
+| Cheap warm runner (0.125 core / 256 MiB request, 2 cores / 2 GiB limit) | ~$0.06/h at 0.25 core / 1 GiB | ~$0.024/h, pickup still 0.1 s |
+| `warm_for_secs = 600` | warm 24/7 | pool switched off 10 min after the last job |
+| Region pinned to `us-east` | cold pickup 4.0 s avg | 3.6 s avg; within noise, not worth 1.75× price |
+| Memory-snapshot "hibernated" runner | n/a | **no-go**: restored runner shows online, but never took the job (still queued after 7.5 min) |
