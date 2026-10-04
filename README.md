@@ -106,3 +106,26 @@ pay off.
 - With warm pools, rgha matched or beat GitHub-hosted queue times, and Docker builds ran ~2× faster (5 s vs 11–12 s).
 - Warm pools cost real money at low volume: keep warm requests tiny (the docker class's 1 core / 4 GiB idle request was the most expensive part of the tail), and size pools to demand (strawgate/rgha#16).
 - Hardware differs: public-repo `ubuntu-latest` is 4 vCPU / 16 GB; these rgha classes request 0.125–1 core and burst to 2.
+
+**Adaptive warm pools + tiny idle requests** (every class requests 0.125 core
+and 256–512 MiB when idle; `warm_max`: tiny 4, small 2, docker 1; +1 warm runner
+per minute while jobs start cold, −1 per 5 minutes quiet):
+
+| job | GitHub queue p50 | rgha queue p50 | GitHub dur p50 | rgha dur p50 | rgha $/job |
+|---|---|---|---|---|---|
+| smoke | 4.0 s | 7.0 s | 5.0 s | 5.0 s | 0.00085 |
+| node | 3.0 s | 3.0 s | 9.0 s | 6.0 s | 0.00118 |
+| python | 4.0 s | 6.0 s | 8.0 s | 7.0 s | 0.00100 |
+| docker | 5.0 s (p90 39 s) | 4.0 s | 10.0 s | 5.0 s | 0.00112 |
+| burst ×10 | 5.0 s | 7.5 s | 7.5 s | 8.0 s | 0.00083 |
+
+The warm targets grew slowly: tiny 0→1→2→3, small 0→1→2, docker 0→1. After
+the last round they shrank one step at a time and reached zero 14 minutes
+later. Warm pickups: docker 2/5, small 3/8, tiny 3/34 (a 10-job burst is
+still mostly cold by design).
+
+| Configuration (42 jobs per side) | Queue p50 (rgha) | rgha controller total | vs GitHub $0.252 |
+|---|---|---|---|
+| Scale to zero (+1 warm tiny runner) | 7–8 s | $0.040 | 6.3× cheaper |
+| Fixed warm pools sized to the burst | 3–4 s | $0.174 | 1.4× cheaper |
+| **Adaptive warm + tiny idle requests** | 3–7.5 s | **$0.061** | **4.1× cheaper** |
