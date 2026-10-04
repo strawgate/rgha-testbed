@@ -93,7 +93,7 @@ jobs:
         run: |
           set -o pipefail
           # Same mode as gh-aw's compiled workflows: rootless network isolation.
-          printf '%s' '{"network":{"allowDomains":["api.github.com","github.com"],"isolation":true}}' > "${RUNNER_TEMP}/awf-config.json"
+          printf '%s' '{"network":{"allowDomains":["api.github.com","github.com"],"isolation":true},"container":{"imageTag":"0.27.22,squid=sha256:3cdcc1e2b4b4fe602ba69fd3e21aac7ac512d5c1fce24df4ce69dc4f98164b59,agent=sha256:55f06588411008b7148eb64b8dfe28602a0cce3675b36c6b190b54aca138468e"}}' > "${RUNNER_TEMP}/awf-config.json"
           awf --config "${RUNNER_TEMP}/awf-config.json" --env-all --log-level info --skip-pull -- /bin/bash -c '
             end=$(( $(date +%s) + AGENT_MINUTES * 60 )); n=0
             while [ "$(date +%s)" -lt "$end" ]; do curl -sf -o /dev/null https://api.github.com/zen && n=$((n+1)); sleep 10; done
